@@ -1,0 +1,92 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Clone source
+      uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Compile source files
+      run: |
+        python3 -c "
+        import os
+        def concat_dir(src_dir, output_file):
+            parts = []
+            base_lua = os.path.join(src_dir, 'base.lua')
+            if os.path.exists(base_lua):
+                with open(base_lua, 'r') as f: parts.append(f.read())
+            for f in sorted(os.listdir(src_dir)):
+                fpath = os.path.join(src_dir, f)
+                if os.path.isfile(fpath) and f.endswith('.lua') and f != 'base.lua':
+                    with open(fpath, 'r') as fh: parts.append(fh.read())
+            for subdir in sorted(os.listdir(src_dir)):
+                subpath = os.path.join(src_dir, subdir)
+                if os.path.isdir(subpath):
+                    for root, dirs, files in os.walk(subpath):
+                        for f in sorted(files):
+                            if f.endswith('.lua'):
+                                with open(os.path.join(root, f), 'r') as fh: parts.append(fh.read())
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            with open(output_file, 'w') as f: f.write('\n'.join(parts))
+
+        game_dirs = {
+            'src/games/universal - base': '_compiled/games/universal.lua',
+            'src/games/bedwars/6872274481 - game': '_compiled/games/6872274481.lua',
+            'src/games/bedwars/6872265039 - lobby': '_compiled/games/6872265039.lua',
+            'src/games/skywars voxel/8768229691 - skywars game': '_compiled/games/8768229691.lua',
+            'src/games/1.8arena/77790193039862 - game': '_compiled/games/77790193039862.lua',
+            'src/games/blocktales/16483433878 - blocktales': '_compiled/games/16483433878.lua',
+            'src/games/bridge duel/139566161526375 - game': '_compiled/games/139566161526375.lua',
+            'src/games/frontlines/5938036553 - game': '_compiled/games/5938036553.lua',
+            'src/games/jailbreak/606849621 - main': '_compiled/games/606849621.lua',
+            'src/games/prison life/155615604 - main': '_compiled/games/155615604.lua',
+            'src/games/redliner/115875349872417 - game': '_compiled/games/115875349872417.lua',
+            'src/games/893973440 - flee the facility': '_compiled/games/893973440.lua',
+        }
+        for src, dst in game_dirs.items():
+            if os.path.isdir(src): concat_dir(src, dst); print(f'Compiled {dst}')
+        "
+
+    - name: Copy libraries and main files
+      run: |
+        mkdir -p _compiled/libraries _compiled/guis
+        cp src/libraries/*.lua _compiled/libraries/
+        cp src/main.lua _compiled/main.lua
+        cp src/loader.lua _compiled/loader.lua
+
+    - name: Compile GUIs
+      run: |
+        python3 -c "
+        import os
+        for gui_name in ['new', 'old', 'rise', 'liquidbounce', 'wurst']:
+            gui_dir = f'src/guis/{gui_name}'
+            if not os.path.isdir(gui_dir): continue
+            parts = []
+            gui_lua = os.path.join(gui_dir, 'gui.lua')
+            if os.path.exists(gui_lua):
+                with open(gui_lua, 'r') as f: parts.append(f.read())
+            comp_dir = os.path.join(gui_dir, 'components')
+            if os.path.isdir(comp_dir):
+                for f in sorted(os.listdir(comp_dir)):
+                    if f.endswith('.lua'):
+                        with open(os.path.join(comp_dir, f), 'r') as fh: parts.append(fh.read())
+            with open(f'_compiled/guis/{gui_name}.lua', 'w') as f: f.write('\n'.join(parts))
+            print(f'Compiled guis/{gui_name}.lua')
+        "
+
+    - name: Commit compiled files
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "username@users.noreply.github.com"
+        git add _compiled/
+        git commit -m "Auto-compile source files" || echo "No changes to commit"
+        git push origin

